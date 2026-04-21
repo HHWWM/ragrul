@@ -1,0 +1,45 @@
+dataset:
+  root: /data/RAG-RUL/phm-ieee-2012-data-challenge-dataset-master
+  processed_dir: ./artifacts/phm2012_processed_exp_a
+  sampling_rate_hz: 25600
+  splits_to_scan:
+  - Learning_set
+  - Full_Test_Set
+  train_fraction_within_learning: 0.85
+model:
+  pretrained_model_path: amazon/chronos-bolt-base
+  seq_len: 128
+  prediction_length: 16
+  augment_mode: moe
+retrieval:
+  database_dir: ./artifacts/retrieval_database_exp_a
+  database_name: phm2012_rul_retrieval_database.parquet
+  embedding_model_name: amazon/chronos-bolt-base
+  embedding_batch_size: 256
+  feature_weight: 0.35
+  top_k: 5
+training:
+  batch_size: 64
+  eval_batch_size: 128
+  epochs: 40
+  steps_per_epoch: 300
+  learning_rate: 0.0005
+  weight_decay: 0.01
+  grad_clip: 1.0
+  shuffle_buffer_length: 4096
+  checkpoint_dir: ./artifacts/checkpoints/phm2012_rul_exp_a
+  freeze_backbone: true
+  patience: 8
+evaluation:
+  output_dir: ./artifacts/evaluation/phm2012_rul_exp_a
+runtime:
+  seed: 2021
+  device: cuda
+  device_map: auto
+  embedding_dtype: bfloat16
+thingsboard:
+  host: localhost
+  port: 1883
+  access_token: Pl62cI94ohUIXLLTyvlAC
+  topic: v1/devices/me/telemetry
+  publish_interval_sec: 15

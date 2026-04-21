@@ -1,0 +1,9 @@
+__pycache__/
+datasets/
+wandb/
+results/
+checkpoints/
+retrieval_database/
+phm-ieee-2012-data-challenge-dataset-master/
+ts/
+TS-RAG/artifacts/
