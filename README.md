@@ -184,6 +184,7 @@ bash script/eval_phm2012_rul.sh
 
 ### 7. 推送到 ThingsBoard
 
+
 ```bash
 bash script/thingsboard_phm2012_rul.sh /path/to/one/bearing_dir
 ```

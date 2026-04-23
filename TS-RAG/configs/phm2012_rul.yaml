@@ -7,7 +7,7 @@ dataset:
 
 model:
   pretrained_model_path: ./checkpoints/base
-  seq_len: 128
+  seq_len: 64 #6464
   prediction_length: 16
   augment_mode: moe
 
@@ -42,8 +42,25 @@ runtime:
   embedding_dtype: bfloat16
 
 thingsboard:
-  host: localhost
+  host: thingsboard.cloud
   port: 1883
-  access_token: Pl62cI94ohUIXLLTyvlAC
-  topic: v1/devices/me/telemetry
-  publish_interval_sec: 15
+  access_token: LnRWZYbPVkneNDYlvmyT
+  telemetry_topic: v1/devices/me/telemetry
+  attributes_topic: v1/devices/me/attributes
+  rpc_request_topic: v1/devices/me/rpc/request/+
+  loop_windows: false
+  publish_interval_sec: 5
+  subscribe_shared_attributes: true
+  subscribe_rpc: true
+  keepalive: 60
+  # use_tls: true
+  # ca_cert: /etc/ssl/certs/ca-certificates.crt
+  # tls_insecure: false
+
+
+# thingsboard:
+#   host: mqtt.thingsboard.cloud
+#   port: 1883
+#   access_token: LnRWZYbPVkneNDYlvmyT
+#   topic: v1/devices/me/telemetry
+#   publish_interval_sec: 15
