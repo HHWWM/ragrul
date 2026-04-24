@@ -1,3 +1,6 @@
+"""
+训练主脚本。它会加载检索数据库、数据集、预训练主干，然后进行有限步数的迭代训练，并在验证集上选最好模型。
+"""
 from __future__ import annotations
 
 import argparse
@@ -16,7 +19,10 @@ from bearing.models.chronosbolt_rul import ChronosBoltModelForRULWithRetrieval
 from bearing.retrieve_bearing import RetrieverForRUL
 from bearing.utils import read_yaml, regression_metrics, save_json, set_seed
 
-
+"""
+    在验证集上评估。
+    同时算归一化寿命指标和“剩余快照步数”指标。
+"""
 @torch.no_grad()
 def evaluate(model, loader, retriever, device):
     model.eval()
@@ -97,12 +103,12 @@ def main() -> None:
     meta = json.loads((db_path.parent / 'database_meta.json').read_text(encoding='utf-8'))
     retriever = RetrieverForRUL(db_path, dimension=int(meta['embedding_dim']))
     retriever.build_index()
-
+# 2. 数据集
     train_dataset = BearingRULIterableDataset(processed_dir / 'windows_train_retrieved.parquet', mode='train', top_k=cfg['retrieval']['top_k']).shuffle(cfg['training'].get('shuffle_buffer_length', 4096))
     val_dataset = BearingRULEvalDataset(processed_dir / 'windows_val_retrieved.parquet', top_k=cfg['retrieval']['top_k'])
     train_loader = DataLoader(train_dataset, batch_size=cfg['training']['batch_size'], num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=cfg['training']['eval_batch_size'], shuffle=False, num_workers=0)
-
+# 3. 载入预训练主干
     config = AutoConfig.from_pretrained(cfg['model']['pretrained_model_path'])
     model = ChronosBoltModelForRULWithRetrieval.from_pretrained(
         cfg['model']['pretrained_model_path'],
@@ -119,7 +125,7 @@ def main() -> None:
             p.requires_grad = False
         for name, p in model.named_parameters():
             p.requires_grad = any(k in name for k in trainable_keywords)
-
+# 4. 可选加载原权重，冻结主干，只训练检索融合层和 RUL 头
     model.to(device)
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params, lr=cfg['training']['learning_rate'], weight_decay=cfg['training']['weight_decay'])
@@ -133,7 +139,7 @@ def main() -> None:
 
     steps_per_epoch = max(1, int(cfg['training'].get('steps_per_epoch', 200)))
     grad_clip = float(cfg['training'].get('grad_clip', 1.0))
-
+# 5. 训练
     for epoch in range(1, int(cfg['training']['epochs']) + 1):
         model.train()
         losses = []
@@ -153,7 +159,7 @@ def main() -> None:
             clip_grad_norm_(params, grad_clip)
             optimizer.step()
             losses.append(float(loss.item()))
-
+# 6. 验证
         scheduler.step()
         val_result = evaluate(model, val_loader, retriever, device)
         val_metrics = val_result['overall_norm']

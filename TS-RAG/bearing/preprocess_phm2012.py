@@ -1,3 +1,6 @@
+"""
+整个项目的数据入口。它负责扫描 PHM2012 的目录，读取每个快照，提特征，做标准化、PCA、HI 构造，然后切成训练、验证、测试窗口
+"""
 from __future__ import annotations
 
 import argparse
@@ -15,14 +18,17 @@ from sklearn.preprocessing import StandardScaler
 from bearing.features import aggregate_window_features, extract_acc_features
 
 
-ACC_COLS = (4, 5)
+ACC_COLS = (4, 5) # 第 5、6 列
 
 
 def read_yaml(path: Path) -> Dict:
     with path.open('r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
-
+"""
+    读取一个 acc_*.csv。
+    离线预处理比较稳健，会尝试逗号、分号、制表符、空白等多种分隔形式。
+"""
 def load_acc_file(path):
     import pandas as pd
     import numpy as np
@@ -59,14 +65,19 @@ def load_acc_file(path):
 
     raise ValueError(f"Failed to parse {path}, last_shape={last_shape}")
 
-
+"""
+    扫描 Learning_set 或 Full_Test_Set 下面的每个轴承文件夹。
+"""
 def iter_bearing_dirs(dataset_root: Path, split_name: str) -> List[Path]:
     split_dir = dataset_root / split_name
     if not split_dir.exists():
         return []
     return sorted([p for p in split_dir.iterdir() if p.is_dir()])
 
-
+"""
+    每个 acc_*.csv 当成一个快照。
+    对每个快照提取特征，并给它分配 snapshot_idx、rul_steps、rul_norm。
+"""
 def build_snapshot_table(bearing_dir, fs, split_name):
     from pathlib import Path
     import pandas as pd
@@ -107,15 +118,23 @@ def build_snapshot_table(bearing_dir, fs, split_name):
             "file_path": str(path),
             "file_name": path.name,
             "snapshot_idx": idx,
-            "rul_steps": total - idx - 1,
-            "rul_norm": (total - idx - 1) / max(total - 1, 1),
+            "rul_steps": total - idx - 1,# 还剩多少个快照
+            "rul_norm": (total - idx - 1) / max(total - 1, 1),# 归一化到 0~1
         }
         row.update(feats)
         rows.append(row)
 
     return pd.DataFrame(rows)
 
-
+"""
+    把“单快照表”切成“窗口表”。
+    一个窗口包含:
+    x             -> 长度为 seq_len 的 HI 序列
+    y_seq         -> 后面 prediction_length 个时刻的归一化 RUL 序列
+    y_rul_norm    -> 当前窗口末端时刻的归一化 RUL
+    y_rul_steps   -> 当前窗口末端时刻对应的剩余快照步数
+    query_features-> 当前窗口聚合特征
+"""
 def build_window_rows(
     snapshot_df: pd.DataFrame,
     feature_cols: List[str],
@@ -138,6 +157,7 @@ def build_window_rows(
         if end_limit < seq_len:
             continue
 
+        # Learning_set 内再按时间顺序切 train / val
         cut_idx = int(end_limit * train_fraction)
 
         for end_idx in range(seq_len - 1, end_limit):
@@ -166,7 +186,15 @@ def build_window_rows(
             })
     return rows
 
-
+"""
+    总流程:
+    1. 扫描数据集
+    2. 提取每个快照的统计特征
+    3. 用训练集拟合标准化缩放器 StandardScaler
+    4. 用训练集拟合 PCA，把多维特征压成 1 维 HI
+    5. 根据 HI 构建窗口
+    6. 保存窗口表和预处理工件
+"""
 def main() -> None:
     parser = argparse.ArgumentParser(description='PHM2012 preprocessing for TS-RAG RUL')
     parser.add_argument('--config', type=str, required=True)
@@ -180,7 +208,7 @@ def main() -> None:
     seq_len = int(cfg['model']['seq_len'])
     pred_len = int(cfg['model']['prediction_length'])
     train_fraction = float(cfg['dataset'].get('train_fraction_within_learning', 0.85))
-
+# 1. 扫描所有 split
     snapshot_tables = []
     for split_name in cfg['dataset'].get('splits_to_scan', ['Learning_set', 'Full_Test_Set']):
         for bearing_dir in iter_bearing_dirs(dataset_root, split_name):
@@ -226,7 +254,7 @@ def main() -> None:
     # PCA/HI 也只能在 Learning_set 上拟合
     X_train_scaled = snapshot_df.loc[learning_mask, feature_cols].astype(np.float32).to_numpy()
     X_all_scaled = snapshot_df.loc[:, feature_cols].astype(np.float32).to_numpy()
-
+# 4. PCA -> HI
     pca = PCA(n_components=1)
     hi_train = pca.fit_transform(X_train_scaled).squeeze()
 

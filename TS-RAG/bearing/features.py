@@ -11,7 +11,9 @@ from scipy.stats import kurtosis, skew
 
 EPS = 1e-12
 
-
+"""
+    安全计算熵，避免出现 0 的对数和除零问题。
+"""
 def _safe_entropy(values: np.ndarray) -> float:
     values = np.asarray(values, dtype=np.float64)
     values = np.abs(values)
@@ -21,12 +23,16 @@ def _safe_entropy(values: np.ndarray) -> float:
     p = values / total
     p = p[p > 0]
     return float(-(p * np.log(p + EPS)).sum())
-
-
+"""
+    安全除法，避免分母接近 0。
+"""
 def _safe_div(a: float, b: float) -> float:
     return float(a / (b + EPS))
 
-
+"""
+    时域特征。
+    这些特征反映振动信号在时域上的离散程度、冲击性、尖锐程度和能量水平。
+"""
 def time_domain_features(x: np.ndarray, prefix: str) -> Dict[str, float]:
     x = np.asarray(x, dtype=np.float64)
     abs_x = np.abs(x)
@@ -48,16 +54,19 @@ def time_domain_features(x: np.ndarray, prefix: str) -> Dict[str, float]:
         f"{prefix}_mean_abs": mean_abs,
         f"{prefix}_skew": float(skew(x, bias=False, nan_policy='omit')) if len(x) > 2 else 0.0,
         f"{prefix}_kurtosis": float(kurtosis(x, bias=False, nan_policy='omit')) if len(x) > 3 else 0.0,
-        f"{prefix}_crest_factor": _safe_div(peak, rms),
-        f"{prefix}_impulse_factor": _safe_div(peak, mean_abs),
-        f"{prefix}_shape_factor": _safe_div(rms, mean_abs),
+        f"{prefix}_crest_factor": _safe_div(peak, rms),# 峰值 / 均方根
+        f"{prefix}_impulse_factor": _safe_div(peak, mean_abs), # 峰值 / 平均绝对值
+        f"{prefix}_shape_factor": _safe_div(rms, mean_abs),# 均方根 / 平均绝对值
         f"{prefix}_clearance_factor": _safe_div(peak, sqrt_amp),
         f"{prefix}_energy": energy,
         f"{prefix}_entropy": _safe_entropy(np.histogram(x, bins=64)[0]),
     }
     return feats
 
-
+"""
+    频域特征。
+    把信号做频谱分析，描述能量分布在频率上的位置和扩散情况。
+"""
 def freq_domain_features(x: np.ndarray, fs: float, prefix: str) -> Dict[str, float]:
     x = np.asarray(x, dtype=np.float64)
     spec = np.abs(rfft(x))
@@ -91,7 +100,10 @@ def freq_domain_features(x: np.ndarray, fs: float, prefix: str) -> Dict[str, flo
     }
     return feats
 
-
+"""
+    时频域特征。
+    用小波分解看不同尺度下的能量分布。
+"""
 def time_frequency_features(x: np.ndarray, prefix: str, wavelet: str = 'db4', level: int = 3) -> Dict[str, float]:
     x = np.asarray(x, dtype=np.float64)
     max_level = min(level, pywt.dwt_max_level(len(x), pywt.Wavelet(wavelet).dec_len))
@@ -106,7 +118,10 @@ def time_frequency_features(x: np.ndarray, prefix: str, wavelet: str = 'db4', le
         feats[f"{prefix}_wavelet_e{i}"] = float(e / total)
     return feats
 
-
+"""
+    把一个窗口里每个快照的特征，再聚合成窗口级特征。
+    这里用了四种聚合方式：均值、标准差、最后值、斜率。
+"""
 def aggregate_window_features(feature_rows: np.ndarray) -> np.ndarray:
     feature_rows = np.asarray(feature_rows, dtype=np.float64)
     if feature_rows.ndim != 2:
@@ -118,7 +133,10 @@ def aggregate_window_features(feature_rows: np.ndarray) -> np.ndarray:
     slope = (last - first) / max(feature_rows.shape[0] - 1, 1)
     return np.concatenate([mean, std, last, slope], axis=0).astype(np.float32)
 
-
+"""
+    这是单个 acc_*.csv 快照的核心入口。
+    输入一份快照的水平、垂直振动信号，输出一个特征字典。
+"""
 def extract_acc_features(horizontal: np.ndarray, vertical: np.ndarray, fs: float) -> Dict[str, float]:
     feats: Dict[str, float] = {}
     feats.update(time_domain_features(horizontal, 'h'))

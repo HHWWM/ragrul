@@ -1,3 +1,6 @@
+"""
+负责把已经整理好的 parquet 窗口表，变成 PyTorch 能读的数据集。训练集采用可迭代、伪打乱；验证集采用普通索引式读取。
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -29,7 +32,11 @@ class PseudoShuffledIterableDataset(IterableDataset):
 class ShuffleMixin:
     def shuffle(self, shuffle_buffer_length: int = 100):
         return PseudoShuffledIterableDataset(self, shuffle_buffer_length)
-
+"""
+    训练集。
+    每次产出一个窗口样本。
+    mode='train' 时会循环不断产生样本，所以 epoch 由 steps_per_epoch 控制。
+"""
 
 class BearingRULIterableDataset(IterableDataset, ShuffleMixin):
     def __init__(self, dataset_path: str | Path, mode: str = 'train', top_k: int = 5):
@@ -59,7 +66,9 @@ class BearingRULIterableDataset(IterableDataset, ShuffleMixin):
             if self.mode != 'train':
                 break
 
-
+"""
+    验证 / 测试集，普通 Dataset。
+"""
 class BearingRULEvalDataset(Dataset):
     def __init__(self, dataset_path: str | Path, top_k: int = 5):
         self.dataset_path = Path(dataset_path)

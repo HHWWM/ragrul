@@ -1,3 +1,6 @@
+"""
+把训练窗口做成可向量数据库。先对每个训练窗口生成嵌入，再和聚合特征拼接，最后用 FAISS 建索引。
+"""
 from __future__ import annotations
 
 import argparse
@@ -15,6 +18,12 @@ from tqdm import tqdm
 
 
 class RetrieverForRUL:
+    """
+    检索器。
+    它真正保存的是:
+    1. 邻居向量索引
+    2. 每个窗口的 x、y_seq 以及拼接后的 whole_seq
+    """
     def __init__(self, retrieval_database_path: str | Path, dimension: int):
         self.retrieval_database_path = str(retrieval_database_path)
         self.dimension = int(dimension)
@@ -39,7 +48,10 @@ class RetrieverForRUL:
         self.bearing_ids = database['bearing_id'].to_numpy()
         self.query_features = np.array(database['query_features'].tolist(), dtype=np.float32)
         self.rul_targets = database['y_rul_norm'].to_numpy(dtype=np.float32)
-
+    """
+    检索 top_k 近邻。
+    如果第一个邻居就是自己且距离为 0，就把它去掉。
+    """
     def search(self, query_vector: np.ndarray, top_k: int, params=None) -> Tuple[np.ndarray, np.ndarray]:
         if self.index is None:
             raise RuntimeError('Index not built.')
@@ -61,7 +73,9 @@ def read_yaml(path: Path) -> Dict:
 
 
 from chronos import BaseChronosPipeline
-
+"""
+    加载时间序列基础模型，用于提取窗口嵌入。
+"""
 def build_embedding_model(cfg):
     retrieval_cfg = cfg.get('retrieval', {})
     runtime_cfg = cfg.get('runtime', {})
@@ -98,7 +112,11 @@ def build_embedding_model(cfg):
     print(f"[INFO] has embed: {hasattr(pipeline, 'embed')}")
     return pipeline
 
-
+"""
+    对每个窗口的 HI 序列求嵌入。
+    如果有基础模型，就取最后一个 token 的表示；
+    如果没有，就退化成直接用原序列。
+"""
 def embed_sequences(sequences: np.ndarray, embedding_model, batch_size: int) -> np.ndarray:
     vectors = []
     for start in tqdm(range(0, len(sequences), batch_size), desc='Embedding windows'):
@@ -109,8 +127,8 @@ def embed_sequences(sequences: np.ndarray, embedding_model, batch_size: int) -> 
         else:
             with torch.no_grad():
                 context = torch.tensor(batch)
-                embeds, _ = embedding_model.embed(context)
-                last_token = embeds[:, -1, :].float().cpu().numpy()
+                embeds, _ = embedding_model.embed(context) # [B, T, D]
+                last_token = embeds[:, -1, :].float().cpu().numpy()# 取最后时刻表示
                 vectors.append(last_token)
 
     out = np.concatenate(vectors, axis=0)
@@ -122,7 +140,10 @@ def l2_normalize(x: np.ndarray) -> np.ndarray:
     denom = np.linalg.norm(x, axis=1, keepdims=True) + 1e-12
     return x / denom
 
-
+"""
+    读取训练窗口，生成最终检索库:
+    embedding = [时间序列嵌入 ; feature_weight * 聚合特征]
+"""
 def create_retrieval_database(cfg: Dict) -> Path:
     processed_dir = Path(cfg['dataset']['processed_dir']).expanduser().resolve()
     train_windows = pd.read_parquet(processed_dir / 'windows_train.parquet')
@@ -155,7 +176,10 @@ def create_retrieval_database(cfg: Dict) -> Path:
         json.dump(meta, f, ensure_ascii=False, indent=2)
     return db_path
 
-
+"""
+    对 train / val / test 的每个窗口都补上近邻索引和近邻距离。
+    这样训练和验证时就不需要临时重新建库。
+"""
 def attach_retrieval_results(cfg: Dict, db_path: Path) -> None:
     processed_dir = Path(cfg['dataset']['processed_dir']).expanduser().resolve()
     meta_path = db_path.parent / 'database_meta.json'

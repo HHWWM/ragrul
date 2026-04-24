@@ -1,3 +1,8 @@
+"""
+在原 TS-RAG 主干上接一个 RUL 回归头。检索增强、编码、融合逻辑不变，只改最后的任务头。
+复用了原 ChronosBolt 的 patching / encoder / decoder / MoE/ARM 融合过程。
+核心意思是:当前窗口编码 + 邻居未来片段编码 + 注意力 / 门控融合 -> 输出一个用于回归的表示。
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +22,10 @@ class RULModelOutput:
     rul_pred: Optional[torch.Tensor] = None
     features: Optional[torch.Tensor] = None
 
-
+"""
+    在原来的“带检索增强的时间序列预测模型”基础上，
+    换一个“归一化剩余寿命回归头”。
+"""
 class ChronosBoltModelForRULWithRetrieval(ChronosBoltModelForForecastingWithRetrieval):
     def __init__(self, config: T5Config, augment: str = 'moe'):
         super().__init__(config=config, augment=augment)
@@ -39,6 +47,13 @@ class ChronosBoltModelForRULWithRetrieval(ChronosBoltModelForForecastingWithRetr
         retrieved_seq: Optional[torch.Tensor] = None,
         distances: Optional[torch.Tensor] = None,
     ) -> RULModelOutput:
+        """
+            输入:
+            context       -> 当前窗口的 x，也就是长度为 seq_len 的 HI 序列
+            retrieved_seq -> 检索到的邻居 whole_seq = [邻居x, 邻居y_seq]
+            distances     -> 邻居距离
+            target        -> 当前窗口的 y_rul_norm
+        """
         mask = mask.to(context.dtype) if mask is not None else torch.isnan(context).logical_not().to(context.dtype)
         batch_size, _ = context.shape
         if context.shape[-1] > self.chronos_config.context_length:

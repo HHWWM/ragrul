@@ -1,3 +1,6 @@
+"""
+在线推理的核心运行时，单次推理和 ThingsBoard 发布。它会加载预处理工件、模型、检索库，然后在指定轴承目录上拿最近一个窗口做预测。
+"""
 from __future__ import annotations
 
 import json
@@ -51,7 +54,11 @@ class RuntimeArtifacts:
     model: ChronosBoltModelForRULWithRetrieval
     db_meta_df: pd.DataFrame
 
-
+"""
+    在线推理运行时。
+    作用是把离线训练阶段生成的工件都重新装起来，
+    然后对一个 bearing_dir 做单次预测。
+"""
 class BearingRULRuntime:
     def __init__(self, config_path: str | Path):
         self.config_path = Path(config_path).expanduser().resolve()
@@ -137,7 +144,13 @@ class BearingRULRuntime:
             "min_end_idx": seq_len,
             "max_end_idx": total,
         }
-
+    """
+        从某个轴承目录里取一个在线预测窗口。
+        注意:
+        这里 end_idx 是右开区间结束位置，
+        files = all_files[start_idx:end_idx]
+        所以窗口大小 = end_idx - start_idx
+    """
     def _load_window_from_bearing_dir(
         self,
         bearing_dir: Path,
@@ -183,7 +196,10 @@ class BearingRULRuntime:
         query_features = aggregate_window_features(feat_scaled)
 
         return hi, query_features, start_idx, end_idx
-
+    """
+        构造在线检索向量:
+        [时间序列嵌入 ; feature_weight * 聚合特征]
+    """
     def _build_query_vector(self, x: np.ndarray, query_features: np.ndarray) -> np.ndarray:
         if self.artifacts.embedding_model is None:
             ts_embed = x.reshape(1, -1)
@@ -203,7 +219,11 @@ class BearingRULRuntime:
             ],
             axis=1,
         ).astype(np.float32)
-
+    """
+        单次预测。
+        返回:
+        归一化 RUL、代理步数、近邻信息、窗口范围信息。
+    """
     def predict(self, bearing_dir: str | Path, end_idx: int | None = None) -> Dict[str, Any]:
         bearing_dir = Path(bearing_dir).expanduser().resolve()
 

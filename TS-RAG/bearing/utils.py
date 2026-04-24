@@ -1,3 +1,6 @@
+"""
+工具函数集合，里面有配置读取、随机种子设置、评价指标和画图函数。PHM Score 也在这里实现
+"""
 from __future__ import annotations
 
 import json
@@ -23,7 +26,10 @@ def set_seed(seed: int = 2021) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-
+"""
+    这里实现的是一个带方向不对称惩罚的评分。
+    预测过晚和预测过早的惩罚不一样。
+"""
 def phm_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
@@ -53,7 +59,10 @@ def save_json(data: Dict, path: str | Path) -> None:
     with path.open('w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-
+"""
+    按 bearing_id 画真实 RUL 曲线和预测 RUL 曲线。
+    横轴是窗口结束位置 end_idx，纵轴是剩余步数。
+"""
 def plot_bearing_curves(records, out_dir: str | Path, filename_prefix: str = 'bearing') -> None:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,6 @@
+"""
+持续上传数据，通过 MQTT 发到 ThingsBoard。它不负责训练，也不负责复杂建模，主要负责“周期执行 + 发布 + 接收控制命令”。
+"""
 from __future__ import annotations
 
 import argparse
@@ -15,6 +18,12 @@ from bearing.bearing_inference_runtime import BearingRULRuntime
 from bearing.utils import read_yaml
 
 
+"""
+    这个类做三件事:
+    1. 定时调用在线推理
+    2. 把结果发布到 ThingsBoard
+    3. 响应远程控制指令，比如切换轴承目录、调整发布间隔
+"""
 class ThingsBoardRULPublisher:
     def __init__(self, config_path: str | Path, bearing_dir: str | Path):
         self.config_path = Path(config_path).expanduser().resolve()
@@ -111,7 +120,9 @@ class ThingsBoardRULPublisher:
 
         if self.loop_windows:
             self.current_end_idx = self.min_end_idx
-
+        """
+        连上之后订阅属性和 RPC 请求。
+        """
     def _on_connect(self, client: mqtt.Client, userdata, flags, reason_code, properties=None):
         print(f"[TB] connected, reason_code={reason_code}")
 
@@ -226,7 +237,15 @@ class ThingsBoardRULPublisher:
             return
 
         self._reply_rpc(request_id, {"ok": False, "error": f"unsupported rpc method: {method}"})
-
+        """
+        响应平台下发的 RPC。
+        支持:
+        getStatus
+        setEnabled
+        setInterval
+        setBearingDir
+        runInferenceOnce
+        """
     def _on_message(self, client: mqtt.Client, userdata, msg) -> None:
         try:
             if msg.topic.startswith("v1/devices/me/rpc/request/"):
@@ -291,7 +310,9 @@ class ThingsBoardRULPublisher:
         telemetry = {"ts": ts, "values": {"connector_error": message}}
         self.client.publish(self.telemetry_topic, json.dumps(telemetry, ensure_ascii=False), qos=1)
         print(f"[TB] error: {message}")
-
+        """
+        持续循环发布。
+        """
     def run(self) -> None:
         self.connect()
 
