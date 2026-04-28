@@ -5,11 +5,13 @@ dataset:
   splits_to_scan: [Learning_set, Full_Test_Set]
   train_fraction_within_learning: 0.85
 
+
 model:
   pretrained_model_path: ./checkpoints/base
-  seq_len: 64 #6464
+  seq_len: 64
   prediction_length: 16
   augment_mode: moe
+  use_retrieval: true
 
 retrieval:
   database_dir: ./artifacts/retrieval_database
@@ -29,11 +31,13 @@ training:
   grad_clip: 1.0
   shuffle_buffer_length: 4096
   checkpoint_dir: ./artifacts/checkpoints/phm2012_rul
+  #checkpoint_dir: ./artifacts/checkpoints/without_retrieval
   freeze_backbone: true
   patience: 8
 
 evaluation:
   output_dir: ./artifacts/evaluation/phm2012_rul
+  #output_dir: ./artifacts/evaluation/without_retrieval
 
 runtime:
   seed: 2021

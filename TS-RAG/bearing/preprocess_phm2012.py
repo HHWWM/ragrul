@@ -1,5 +1,5 @@
 """
-整个项目的数据入口。它负责扫描 PHM2012 的目录，读取每个快照，提特征，做标准化、PCA、HI 构造，然后切成训练、验证、测试窗口
+基于时间序列基础模型rag的滚动轴承剩余寿命预测，整个项目的数据入口。它负责扫描 PHM2012 的目录，读取每个快照，提特征，做标准化、PCA、HI 构造，然后切成训练、验证、测试窗口
 """
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def iter_bearing_dirs(dataset_root: Path, split_name: str) -> List[Path]:
     return sorted([p for p in split_dir.iterdir() if p.is_dir()])
 
 """
-    每个 acc_*.csv 当成一个快照。
+    每个 acc_*.csv 当成一个快照。从原始振动波形，变成一张按时间排序的快照表。
     对每个快照提取特征，并给它分配 snapshot_idx、rul_steps、rul_norm。
 """
 def build_snapshot_table(bearing_dir, fs, split_name):
